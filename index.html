@@ -28,8 +28,6 @@
         import { createRoot } from 'react-dom/client';
         import { Plus, Trash2, Download, Save, Upload, Network, Eye } from 'lucide-react';
 
-        // --- PASTE YOUR COMPONENT CODE BELOW ---
-
         const FiberNetworkManager = () => {
           const [rooms, setRooms] = useState([]);
           const [equipment, setEquipment] = useState([]);
@@ -46,8 +44,11 @@
             room: '', 
             description: '' 
           });
+          
+          // UPDATED: Split label into labelFrom and labelTo
           const [newConnection, setNewConnection] = useState({
-            label: '',
+            labelFrom: '',
+            labelTo: '',
             fromEquipment: '',
             toEquipment: '',
             fiberType: 'single-mode',
@@ -79,12 +80,14 @@
           };
 
           const addConnection = () => {
-            if (newConnection.label.trim() && newConnection.fromEquipment && newConnection.toEquipment) {
+            // UPDATED: Check both labels
+            if ((newConnection.labelFrom.trim() || newConnection.labelTo.trim()) && newConnection.fromEquipment && newConnection.toEquipment) {
               const conn = { id: Date.now(), ...newConnection, createdAt: new Date().toISOString() };
               setConnections([...connections, conn]);
-              logChange('add', 'connection', newConnection.label);
+              logChange('add', 'connection', `${newConnection.labelFrom}->${newConnection.labelTo}`);
               setNewConnection({
-                label: '',
+                labelFrom: '',
+                labelTo: '',
                 fromEquipment: '',
                 toEquipment: '',
                 fiberType: 'single-mode',
@@ -187,7 +190,7 @@
             });
 
             const roomKeys = Object.keys(roomGroups);
-            const width = Math.max(800, roomKeys.length * 250);
+            const width = Math.max(800, roomKeys.length * 300); // Increased width slightly
             const height = 600;
 
             return (
@@ -201,31 +204,31 @@
                 <div className="overflow-auto border rounded">
                   <svg id="network-diagram" width={width} height={height} className="bg-gray-50">
                     {roomKeys.map((roomId, roomIdx) => {
-                      const x = roomIdx * 250 + 50;
+                      const x = roomIdx * 300 + 50; // Increased spacing
                       const roomEquipment = roomGroups[roomId];
                       
                       return (
                         <g key={roomId}>
-                          <rect x={x} y={20} width={200} height={height - 40} 
+                          <rect x={x} y={20} width={220} height={height - 40} 
                                 fill="#e0f2fe" stroke="#0284c7" strokeWidth="2" rx="8"/>
-                          <text x={x + 100} y={45} textAnchor="middle" 
+                          <text x={x + 110} y={45} textAnchor="middle" 
                                 fontWeight="bold" fontSize="14" fill="#0c4a6e">
                             {getRoomName(roomId)}
                           </text>
                           
                           {roomEquipment.map((equip, idx) => {
-                            const equipY = 70 + idx * 60;
-                            const equipX = x + 100;
+                            const equipY = 70 + idx * 70;
+                            const equipX = x + 110;
                             
                             return (
                               <g key={equip.id}>
-                                <rect x={x + 20} y={equipY} width={160} height={45}
+                                <rect x={x + 20} y={equipY} width={180} height={50}
                                       fill="#fff" stroke="#0284c7" strokeWidth="1.5" rx="4"/>
-                                <text x={equipX} y={equipY + 18} textAnchor="middle" 
+                                <text x={equipX} y={equipY + 20} textAnchor="middle" 
                                       fontSize="12" fontWeight="bold" fill="#0c4a6e">
                                   {equip.name}
                                 </text>
-                                <text x={equipX} y={equipY + 33} textAnchor="middle" 
+                                <text x={equipX} y={equipY + 38} textAnchor="middle" 
                                       fontSize="10" fill="#64748b">
                                   {equip.type}
                                 </text>
@@ -246,20 +249,46 @@
                         const fromEquipIdx = roomGroups[fromEquip.room].indexOf(fromEquip);
                         const toEquipIdx = roomGroups[toEquip.room].indexOf(toEquip);
                         
-                        const x1 = fromRoomIdx * 250 + 50 + 180;
-                        const y1 = 70 + fromEquipIdx * 60 + 22;
-                        const x2 = toRoomIdx * 250 + 50 + 20;
-                        const y2 = 70 + toEquipIdx * 60 + 22;
+                        // Calculate coordinates
+                        // x1 is right edge of Source Box
+                        const x1 = fromRoomIdx * 300 + 50 + 200; 
+                        const y1 = 70 + fromEquipIdx * 70 + 25;
+                        
+                        // x2 is left edge of Dest Box
+                        const x2 = toRoomIdx * 300 + 50 + 20;
+                        const y2 = 70 + toEquipIdx * 70 + 25;
                         
                         const midX = (x1 + x2) / 2;
                         
+                        // UPDATED: Calculate label positions
+                        // Position Source Label 15% along the path from source
+                        const labelX1 = x1 + (x2 - x1) * 0.15;
+                        const labelY1 = y1; 
+
+                        // Position Dest Label 85% along the path from source (or 15% from dest)
+                        const labelX2 = x1 + (x2 - x1) * 0.85;
+                        const labelY2 = y2;
+                        
+                        // Determine text anchor based on direction
+                        const isLeftToRight = x2 > x1;
+
                         return (
                           <g key={conn.id}>
                             <path d={`M ${x1} ${y1} Q ${midX} ${y1}, ${midX} ${(y1 + y2) / 2} Q ${midX} ${y2}, ${x2} ${y2}`}
                                   stroke="#f97316" strokeWidth="2" fill="none" markerEnd="url(#arrowhead)"/>
-                            <text x={midX} y={(y1 + y2) / 2 - 5} textAnchor="middle" 
-                                  fontSize="9" fill="#ea580c" fontWeight="bold">
-                              {conn.label}
+                            
+                            {/* Source Label */}
+                            <text x={labelX1} y={labelY1 - 5} 
+                                  textAnchor={isLeftToRight ? "start" : "end"} 
+                                  fontSize="10" fill="#ea580c" fontWeight="bold">
+                              {conn.labelFrom}
+                            </text>
+
+                             {/* Dest Label */}
+                             <text x={labelX2} y={labelY2 - 5} 
+                                  textAnchor={isLeftToRight ? "end" : "start"} 
+                                  fontSize="10" fill="#ea580c" fontWeight="bold">
+                              {conn.labelTo}
                             </text>
                           </g>
                         );
@@ -324,6 +353,7 @@
                     </div>
                   </div>
 
+                  {/* ROOMS TAB */}
                   {activeTab === 'rooms' && (
                     <div>
                       <h2 className="text-xl font-bold mb-4">Rooms</h2>
@@ -365,6 +395,7 @@
                     </div>
                   )}
 
+                  {/* EQUIPMENT TAB */}
                   {activeTab === 'equipment' && (
                     <div>
                       <h2 className="text-xl font-bold mb-4">Equipment</h2>
@@ -427,18 +458,31 @@
                     </div>
                   )}
 
+                  {/* CONNECTIONS TAB */}
                   {activeTab === 'connections' && (
                     <div>
                       <h2 className="text-xl font-bold mb-4">Fiber Connections</h2>
                       <div className="bg-gray-50 p-4 rounded mb-4">
                         <div className="grid grid-cols-2 gap-4 mb-3">
-                          <input
-                            type="text"
-                            placeholder="Fiber label (both ends)"
-                            value={newConnection.label}
-                            onChange={(e) => setNewConnection({ ...newConnection, label: e.target.value })}
-                            className="px-3 py-2 border rounded"
-                          />
+                          
+                          {/* UPDATED: Split inputs for Source and Dest labels */}
+                          <div className="flex gap-2">
+                             <input
+                              type="text"
+                              placeholder="Label (Source)"
+                              value={newConnection.labelFrom}
+                              onChange={(e) => setNewConnection({ ...newConnection, labelFrom: e.target.value })}
+                              className="px-3 py-2 border rounded w-full"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Label (Dest)"
+                              value={newConnection.labelTo}
+                              onChange={(e) => setNewConnection({ ...newConnection, labelTo: e.target.value })}
+                              className="px-3 py-2 border rounded w-full"
+                            />
+                          </div>
+
                           <select
                             value={newConnection.fiberType}
                             onChange={(e) => setNewConnection({ ...newConnection, fiberType: e.target.value })}
@@ -494,7 +538,12 @@
                         {connections.map(conn => (
                           <div key={conn.id} className="bg-white border rounded p-3 flex justify-between items-center">
                             <div>
-                              <div className="font-bold text-orange-600">{conn.label}</div>
+                              {/* UPDATED: Display both labels */}
+                              <div className="font-bold text-orange-600 flex gap-2 items-center">
+                                <span>{conn.labelFrom || conn.label}</span>
+                                <span className="text-gray-400 text-sm">→</span>
+                                <span>{conn.labelTo || conn.label}</span>
+                              </div>
                               <div className="text-sm text-gray-600">
                                 {getEquipmentName(conn.fromEquipment)} → {getEquipmentName(conn.toEquipment)}
                               </div>
@@ -502,7 +551,7 @@
                                 {conn.fiberType} • {conn.length} • {conn.notes}
                               </div>
                             </div>
-                            <button onClick={() => deleteItem('connection', conn.id, conn.label)} 
+                            <button onClick={() => deleteItem('connection', conn.id, conn.labelFrom)} 
                                     className="text-red-600 hover:bg-red-50 p-2 rounded">
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -512,6 +561,7 @@
                     </div>
                   )}
 
+                  {/* CHANGELOG TAB */}
                   {activeTab === 'changelog' && (
                     <div>
                       <h2 className="text-xl font-bold mb-4">Change Log</h2>
@@ -541,7 +591,6 @@
           );
         };
 
-        // --- MOUNT THE APPLICATION ---
         const root = createRoot(document.getElementById('root'));
         root.render(<FiberNetworkManager />);
 
