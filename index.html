@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fiber Network Manager - V3</title>
+    <title>Fiber Network Manager - V4</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -172,31 +172,18 @@
           // --- Diagram Component ---
 
           const NetworkDiagram = () => {
-            // 1. Group Equipment by Room
-            // We use useMemo to run the layout algorithm only when data changes
+            
             const { sortedRoomKeys, sortedRoomGroups } = useMemo(() => {
                 let roomGroups = {};
-                
-                // Initialize groups
                 rooms.forEach(r => roomGroups[r.id] = []);
-                
-                // Fill groups
                 equipment.forEach(e => {
                     if (roomGroups[e.room]) roomGroups[e.room].push(e);
                 });
 
                 const roomKeys = Object.keys(roomGroups);
 
-                // --- SMART LAYOUT ALGORITHM ---
                 if (autoLayout) {
-                    // Simple Barycenter-like heuristic:
-                    // 1. Assign index to rooms (0, 1, 2...)
-                    // 2. Iterate rooms. For each equipment, find avg Y of neighbors in previous columns.
-                    // This is a simplified version: we sort based on connection "pull"
-                    
-                    const roomOrder = [...roomKeys]; // Keep room order fixed (user defined)
-
-                    // Helper: Get connected peers for an equipment ID
+                    const roomOrder = [...roomKeys]; 
                     const getConnectedIds = (eqId) => {
                         const peers = [];
                         connections.forEach(c => {
@@ -206,27 +193,19 @@
                         return peers;
                     };
 
-                    // We run a few passes to settle positions
                     for (let pass = 0; pass < 3; pass++) {
                          roomOrder.forEach((rId, rIdx) => {
                              const roomEquips = roomGroups[rId];
-                             
-                             // Calculate a "score" for each equipment
                              const scoredEquips = roomEquips.map((eq, idx) => {
                                  let score = 0;
                                  let count = 0;
-                                 
                                  const peers = getConnectedIds(eq.id);
                                  peers.forEach(peerId => {
-                                     // Find which room the peer is in
                                      const peerEquip = equipment.find(e => e.id.toString() === peerId);
                                      if (peerEquip) {
-                                         const peerRoomIdx = roomOrder.indexOf(peerEquip.room);
-                                         // If peer is in a DIFFERENT room, use its current relative index
                                          if (peerEquip.room !== rId) {
                                             const peerGroup = roomGroups[peerEquip.room];
                                             const peerIndex = peerGroup.indexOf(peerEquip);
-                                            // We normalize height (0 to 1) to compare across rooms
                                             if (peerIndex !== -1) {
                                                 score += peerIndex; 
                                                 count++;
@@ -234,21 +213,15 @@
                                          }
                                      }
                                  });
-
-                                 // If no connections, keep original order (weight by current index)
                                  const finalScore = count > 0 ? (score / count) : idx;
                                  return { eq, finalScore };
                              });
-
-                             // Sort this room based on score
                              scoredEquips.sort((a, b) => a.finalScore - b.finalScore);
                              roomGroups[rId] = scoredEquips.map(s => s.eq);
                          });
                     }
                 }
-
                 return { sortedRoomKeys: roomKeys, sortedRoomGroups: roomGroups };
-
             }, [rooms, equipment, connections, autoLayout]);
 
             
@@ -258,7 +231,7 @@
             const maxItemsInRoom = Math.max(...Object.values(sortedRoomGroups).map(g => g.length), 0);
             const height = Math.max(600, maxItemsInRoom * 100 + 100);
 
-            // Pre-calc bundling for clean lines
+            // Pre-calc bundling
             const connectionCounts = {};
             connections.forEach(c => {
                const pairKey = [c.fromEquipment, c.toEquipment].sort().join('-');
@@ -266,16 +239,15 @@
             });
             const drawnCounts = {};
 
-            // Colors
             const colors = {
-                roomBg: '#f1f5f9', // Slate 100
-                roomStroke: '#cbd5e1', // Slate 300
-                roomText: '#334155', // Slate 700
+                roomBg: '#f1f5f9', 
+                roomStroke: '#cbd5e1', 
+                roomText: '#334155',
                 equipBg: '#ffffff',
-                equipStroke: '#475569', // Slate 600
-                equipText: '#0f172a', // Slate 900
-                fiberSM: '#2563eb', // Blue 600 (Single Mode)
-                fiberMM: '#f97316', // Orange 500 (Multi Mode)
+                equipStroke: '#475569',
+                equipText: '#0f172a', 
+                fiberSM: '#2563eb', 
+                fiberMM: '#f97316', 
             };
 
             return (
@@ -328,7 +300,7 @@
                           
                           {/* Equipment */}
                           {roomEquipment.map((equip, idx) => {
-                            const equipY = 110 + idx * 90; // Increased spacing
+                            const equipY = 110 + idx * 90; 
                             const equipX = x + 120;
                             
                             return (
@@ -377,57 +349,83 @@
                         const spacing = 10;
                         const offset = (currentIdx - (totalInBundle - 1) / 2) * spacing;
 
-                        // Coordinates
-                        // Start point: Right edge of From Box
-                        const x1 = fromRoomIdx * colWidth + 50 + 220; 
-                        const y1 = 110 + fromEquipIdx * 90 + 30;
-                        
-                        // End point: Left edge of To Box
-                        const x2 = toRoomIdx * colWidth + 50 + 20;
-                        const y2 = 110 + toEquipIdx * 90 + 30;
-                        
-                        // Apply Bundle Offset
-                        const finalY1 = y1 + offset;
-                        const finalY2 = y2 + offset;
-
-                        // Control points for smoother bezier
-                        const midX = (x1 + x2) / 2;
-                        
-                        // Color based on fiber type
+                        // Color setup
                         const isMultiMode = conn.fiberType === 'multi-mode';
                         const strokeColor = isMultiMode ? colors.fiberMM : colors.fiberSM;
                         const markerUrl = isMultiMode ? 'url(#arrowhead-mm)' : 'url(#arrowhead-sm)';
 
-                        // Label Positions
-                        const labelX1 = x1 + (x2 - x1) * 0.15;
-                        const labelY1 = finalY1; 
-                        const labelX2 = x1 + (x2 - x1) * 0.85;
-                        const labelY2 = finalY2;
-                        
-                        const isLeftToRight = x2 > x1;
+                        // === LOGIC SPLIT: SAME ROOM vs DIFFERENT ROOM ===
 
-                        return (
-                          <g key={conn.id} className="connection-group hover:opacity-100 opacity-90 transition-opacity">
-                            <path d={`M ${x1} ${finalY1} C ${midX} ${finalY1}, ${midX} ${finalY2}, ${x2} ${finalY2}`}
-                                  stroke={strokeColor} strokeWidth="2" fill="none" markerEnd={markerUrl}
-                                  strokeDasharray={conn.length.includes('km') ? "5,5" : "0"} 
-                            />
+                        if (fromRoomIdx === toRoomIdx) {
+                            // --- SAME ROOM CONNECTION (Loop curve on the right) ---
+                            const xBase = fromRoomIdx * colWidth + 50 + 220; // Right edge of box
+                            const x1 = xBase;
+                            const x2 = xBase;
+                            const y1 = 110 + fromEquipIdx * 90 + 30 + offset;
+                            const y2 = 110 + toEquipIdx * 90 + 30 + offset;
                             
-                            {/* Source Label */}
-                            <text x={labelX1} y={labelY1 - 6} 
-                                  textAnchor={isLeftToRight ? "start" : "end"} 
-                                  fontSize="10" fill={strokeColor} fontWeight="bold" fontFamily="monospace">
-                              {conn.labelFrom}
-                            </text>
+                            // Control points curve outward to the right
+                            const curveDepth = 50 + (Math.abs(y1 - y2) * 0.1); // Dynamic curve width
+                            const cpX = xBase + curveDepth;
 
-                             {/* Dest Label */}
-                             <text x={labelX2} y={labelY2 - 6} 
-                                  textAnchor={isLeftToRight ? "end" : "start"} 
-                                  fontSize="10" fill={strokeColor} fontWeight="bold" fontFamily="monospace">
-                              {conn.labelTo}
-                            </text>
-                          </g>
-                        );
+                            const pathD = `M ${x1} ${y1} C ${cpX} ${y1}, ${cpX} ${y2}, ${x2} ${y2}`;
+
+                            // Labels for same room (positioned at the peak of the curve)
+                            const labelX = cpX + 5;
+                            const labelY1 = y1 + (y2 - y1) * 0.25;
+                            const labelY2 = y1 + (y2 - y1) * 0.75;
+                            
+                            return (
+                                <g key={conn.id} className="connection-group hover:opacity-100 opacity-90 transition-opacity">
+                                    <path d={pathD}
+                                        stroke={strokeColor} strokeWidth="2" fill="none" markerEnd={markerUrl}
+                                        strokeDasharray={conn.length.includes('km') ? "5,5" : "0"} 
+                                    />
+                                    <text x={labelX} y={labelY1} fontSize="10" fill={strokeColor} fontWeight="bold" fontFamily="monospace">
+                                        {conn.labelFrom}
+                                    </text>
+                                    <text x={labelX} y={labelY2} fontSize="10" fill={strokeColor} fontWeight="bold" fontFamily="monospace">
+                                        {conn.labelTo}
+                                    </text>
+                                </g>
+                            );
+
+                        } else {
+                            // --- DIFFERENT ROOM CONNECTION (Left to Right) ---
+                            const x1 = fromRoomIdx * colWidth + 50 + 220; 
+                            const y1 = 110 + fromEquipIdx * 90 + 30 + offset;
+                            
+                            const x2 = toRoomIdx * colWidth + 50 + 20;
+                            const y2 = 110 + toEquipIdx * 90 + 30 + offset;
+                            
+                            const midX = (x1 + x2) / 2;
+                            const isLeftToRight = x2 > x1;
+
+                            // Standard Labels
+                            const labelX1 = x1 + (x2 - x1) * 0.15;
+                            const labelY1 = y1; 
+                            const labelX2 = x1 + (x2 - x1) * 0.85;
+                            const labelY2 = y2;
+
+                            return (
+                                <g key={conn.id} className="connection-group hover:opacity-100 opacity-90 transition-opacity">
+                                    <path d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
+                                        stroke={strokeColor} strokeWidth="2" fill="none" markerEnd={markerUrl}
+                                        strokeDasharray={conn.length.includes('km') ? "5,5" : "0"} 
+                                    />
+                                    <text x={labelX1} y={labelY1 - 6} 
+                                        textAnchor={isLeftToRight ? "start" : "end"} 
+                                        fontSize="10" fill={strokeColor} fontWeight="bold" fontFamily="monospace">
+                                    {conn.labelFrom}
+                                    </text>
+                                    <text x={labelX2} y={labelY2 - 6} 
+                                        textAnchor={isLeftToRight ? "end" : "start"} 
+                                        fontSize="10" fill={strokeColor} fontWeight="bold" fontFamily="monospace">
+                                    {conn.labelTo}
+                                    </text>
+                                </g>
+                            );
+                        }
                       }
                       return null;
                     })}
